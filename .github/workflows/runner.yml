@@ -1,0 +1,54 @@
+# .github/workflows/ci.yml
+name: CI/CD on self-hosted runner
+
+on:
+  push:               # react to ANY change on any branch
+    branches: ["**"]
+  workflow_dispatch:  # allow manual runs from the Actions tab
+
+jobs:
+  build:
+    runs-on:          # MUST match the labels your runner shows
+      - self-hosted
+      - linux
+    name: Build & Auto-Push
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # we need full history to push back
+
+      # ─────── put your real build / test commands here ───────
+      - name: Build tool
+        run: |
+          echo ">> replace this echo with your build, e.g. make -j$(nproc)"
+      # ─────────────────────────────────────────────────────────
+
+      # Auto-commit any modified or generated files
+      - name: Configure git identity
+        run: |
+          git config --global user.name  "CI Bot"
+          git config --global user.email "ci-bot@users.noreply.github.com"
+
+      - name: Commit & push changes (if any)
+        env:
+          GH_TOKEN: ${{ secrets.GH_PUSH_TOKEN }}
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            git add -A
+            git commit -m "ci: auto-update generated files [skip ci]"
+            # use PAT to authenticate the push
+            git push https://$GH_TOKEN@github.com/${{ github.repository }} \
+              HEAD:${{ github.ref }}
+          else
+            echo "Nothing to commit"
+          fi
+
+      # (Optional) archive artefacts – adjust or drop as needed
+      - name: Upload build artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            dist/**
+            build/**
